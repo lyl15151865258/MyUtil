@@ -186,6 +186,31 @@ public class EthernetUtil {
     }
 
     /**
+     * 设置以太网拨号
+     *
+     * @param username 宽带账号
+     * @param password 宽带密码
+     */
+    public static boolean setEthernetPppoe(Context context, String username, String password) {
+        String interfaceName = "eth0";
+        try {
+            @SuppressLint("PrivateApi") Class<?> pppoeManagerCls = Class.forName("android.net.PppoeManager");
+            //获取EthernetManager实例
+            @SuppressLint("WrongConstant") Object pppoeManager = context.getSystemService("pppoe");
+            //获取EthernetManager的setConfiguration()
+            Method connect = pppoeManagerCls.getDeclaredMethod("connect", String.class, String.class, String.class);
+            //保存静态ip设置
+//            saveIpSettings(context, address, mask, gate, dns);
+            //设置静态IP
+            connect.invoke(pppoeManager, username, password, interfaceName);
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /**
      * 获取以太网MAC地址
      */
     public static String getEthernetMac(String ifname) {
@@ -214,14 +239,17 @@ public class EthernetUtil {
             builder.append(hex);
             builder.append(":");
         }
-
-        return builder.deleteCharAt(builder.length() - 1).toString().toUpperCase();
+        if (builder.length() > 0) {
+            builder.deleteCharAt(builder.length() - 1);
+        }
+        return builder.toString().toUpperCase();
     }
 
     /**
      * 获取IP地址
      */
-    public static String getIpAddress(String interfaceName) {
+    public static String getIpAddress() {
+        String interfaceName = "eth0";
         try {
             //获取本机所有的网络接口
             Enumeration<NetworkInterface> enNetworkInterface = NetworkInterface.getNetworkInterfaces();
@@ -273,7 +301,8 @@ public class EthernetUtil {
     /**
      * 获取子网掩码
      */
-    public static String getNetMask(String interfaceName) {
+    public static String getNetMask() {
+        String interfaceName = "eth0";
         try {
             //获取本机所有的网络接口
             Enumeration<NetworkInterface> networkInterfaceEnumeration = NetworkInterface.getNetworkInterfaces();
@@ -281,18 +310,22 @@ public class EthernetUtil {
             while (networkInterfaceEnumeration.hasMoreElements()) {
                 //获取 Enumeration 对象中的下一个数据
                 NetworkInterface networkInterface = networkInterfaceEnumeration.nextElement();
-                if (!networkInterface.isUp() && !interfaceName.equals(networkInterface.getDisplayName())) {
-
+                if (networkInterface.isUp() && interfaceName.equals(networkInterface.getDisplayName())) {
                     //判断网口是否在使用，判断是否时我们获取的网口
-                    continue;
-                }
-                for (InterfaceAddress interfaceAddress : networkInterface.getInterfaceAddresses()) {
-                    if (interfaceAddress.getAddress() instanceof Inet4Address) {
-
-                        //仅仅处理ipv4
-                        //获取掩码位数，通过 calcMaskByPrefixLength 转换为字符串
-                        return calcMaskByPrefixLength(interfaceAddress.getNetworkPrefixLength());
+                    for (InterfaceAddress interfaceAddress : networkInterface.getInterfaceAddresses()) {
+                        if (interfaceAddress.getAddress() instanceof Inet4Address) {
+                            //仅仅处理ipv4
+                            switch (interfaceAddress.getNetworkPrefixLength()) {
+                                case 8:
+                                    return "255.0.0.0";
+                                case 16:
+                                    return "255.255.0.0";
+                                case 24:
+                                    return "255.255.255.0";
+                            }
+                        }
                     }
+                    break;
                 }
             }
         } catch (SocketException e) {
@@ -301,38 +334,28 @@ public class EthernetUtil {
         return "0.0.0.0";
     }
 
-    private static String calcMaskByPrefixLength(int length) {
-        int mask = 0xffffffff << (32 - length);
-        int partsNum = 4;
-        int bitsOfPart = 8;
-        int[] maskParts = new int[partsNum];
-        int selector = 0x000000ff;
-        for (int i = 0; i < maskParts.length; i++) {
-            int pos = maskParts.length - 1 - i;
-            maskParts[pos] = (mask >> (i * bitsOfPart)) & selector;
-        }
-        StringBuilder result = new StringBuilder();
-        result.append(maskParts[0]);
-        for (int i = 1; i < maskParts.length; i++) {
-            result.append(".").append(maskParts[i]);
-        }
-        return result.toString();
-    }
-
     /**
-     * 获取dns
+     * 获取dns(仅获取IPV4的DNS)
      */
     public static String getDns(Context context) {
-        String[] dnsServers = getDnsFromCmd();
-        if (dnsServers.length == 0) {
-            dnsServers = getDnsFromConnectionManager(context);
+        try {
+            String[] dnsServers = getDnsFromCmd();
+            if (dnsServers.length == 0) {
+                dnsServers = getDnsFromConnectionManager(context);
+            }
+            StringBuilder sb = new StringBuilder();
+            for (String dnsServer : dnsServers) {
+                sb.append(dnsServer);
+                sb.append(",");
+            }
+            if (sb.length() > 0) {
+                sb.deleteCharAt(sb.length() - 1);
+                return sb.toString();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        StringBuilder sb = new StringBuilder();
-        for (String dnsServer : dnsServers) {
-            sb.append(dnsServer);
-            sb.append(",");
-        }
-        return sb.deleteCharAt(sb.length() - 1).toString();
+        return "0.0.0.0";
     }
 
     //通过 getprop 命令获取
@@ -354,10 +377,16 @@ public class EthernetUtil {
                         || property.endsWith(".dns3")
                         || property.endsWith(".dns4")) {
                     InetAddress ip = InetAddress.getByName(value);
-                    value = ip.getHostAddress();
-                    if (value == null) continue;
-                    if (value.length() == 0) continue;
-                    dnsServers.add(value);
+                    if (ip instanceof Inet4Address) {
+                        value = ip.getHostAddress();
+                        if (value == null) {
+                            continue;
+                        }
+                        if (value.length() == 0) {
+                            continue;
+                        }
+                        dnsServers.add(value);
+                    }
                 }
             }
         } catch (Exception e) {
@@ -379,7 +408,9 @@ public class EthernetUtil {
                         if (networkInfo != null && networkInfo.getType() == activeNetworkInfo.getType()) {
                             LinkProperties lp = connectivityManager.getLinkProperties(network);
                             for (InetAddress addr : lp.getDnsServers()) {
-                                dnsServers.add(addr.getHostAddress());
+                                if (addr instanceof Inet4Address) {
+                                    dnsServers.add(addr.getHostAddress());
+                                }
                             }
                         }
                     }
@@ -416,7 +447,7 @@ public class EthernetUtil {
     /**
      * 判断以太网类型
      */
-    public static String getIpAssignment(Context context) {
+    public static String getConnectMode(Context context) {
         try {
             @SuppressLint("PrivateApi") Class<?> ethernetManagerCls = Class.forName("android.net.EthernetManager");
             @SuppressLint("PrivateApi") Class<?> ipConfigurationCls = Class.forName("android.net.IpConfiguration");
