@@ -473,4 +473,19 @@ public class EthernetUtil {
         return "UNASSIGNED";
     }
 
+    /**
+     * 设置以太网动态获取IP
+     */
+    public static int isAvailable(Context context) {
+        try {
+            @SuppressLint("PrivateApi") Class<?> ethernetManagerCls = Class.forName("android.net.EthernetManager");
+            @SuppressLint("WrongConstant") Object ethManager = context.getSystemService("ethernet");
+            Method getEthernetConnectState = ethernetManagerCls.getDeclaredMethod("getEthernetConnectState");
+            return (Integer) getEthernetConnectState.invoke(ethManager);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return -100;
+    }
+
 }

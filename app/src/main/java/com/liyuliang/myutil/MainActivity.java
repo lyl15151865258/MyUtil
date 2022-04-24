@@ -16,7 +16,8 @@ public class MainActivity extends AppCompatActivity {
         Log.d("MainActivity", "网关：" + EthernetUtil.getGateWay());
         Log.d("MainActivity", "DNS：" + EthernetUtil.getDns(this));
         Log.d("MainActivity", "子网掩码：" + EthernetUtil.getNetMask());
-        EthernetUtil.setEthernetPppoe(this,"123456","123456");
+        Log.d("MainActivity", "网络状态：" + EthernetUtil.isAvailable(this));
+//        EthernetUtil.setEthernetPppoe(this,"123456","123456");
 
 //        EthernetUtil.setDynamicIp(this);
 
