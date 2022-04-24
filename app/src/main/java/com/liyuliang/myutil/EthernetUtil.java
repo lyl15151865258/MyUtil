@@ -27,6 +27,7 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Objects;
 
 public class EthernetUtil {
 
@@ -410,6 +411,35 @@ public class EthernetUtil {
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
         }
+    }
+
+    /**
+     * 判断以太网类型
+     */
+    public static String getIpAssignment(Context context) {
+        try {
+            @SuppressLint("PrivateApi") Class<?> ethernetManagerCls = Class.forName("android.net.EthernetManager");
+            @SuppressLint("PrivateApi") Class<?> ipConfigurationCls = Class.forName("android.net.IpConfiguration");
+            @SuppressLint("WrongConstant") Object ethManager = context.getSystemService("ethernet");
+            Method getConfiguration = ethernetManagerCls.getDeclaredMethod("getConfiguration");
+            Method getIpAssignment = ipConfigurationCls.getDeclaredMethod("getIpAssignment");
+            Object config = getConfiguration.invoke(ethManager);
+            Object ipAssignment = getIpAssignment.invoke(config);
+            //获取ipAssignment、proxySettings的枚举值
+            Map<String, Object> ipConfigurationEnum = getIpConfigurationEnum(ipConfigurationCls);
+            if (Objects.equals(ipConfigurationEnum.get("IpAssignment.STATIC"), ipAssignment)) {
+                return "STATIC";
+            } else if (Objects.equals(ipConfigurationEnum.get("IpAssignment.DHCP"), ipAssignment)) {
+                return "DHCP";
+            } else if (Objects.equals(ipConfigurationEnum.get("IpAssignment.PPPOE"), ipAssignment)) {
+                return "PPPOE";
+            } else if (Objects.equals(ipConfigurationEnum.get("IpAssignment.UNASSIGNED"), ipAssignment)) {
+                return "UNASSIGNED";
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return "UNASSIGNED";
     }
 
 }
